@@ -7,6 +7,7 @@
 #include <malloc.h>
 #include <memory.h>
 
+
 #define COLOR_BLUE   "000\0"
 #define COLOR_RED    "001\0"
 #define COLOR_GREEN  "010\0"
@@ -22,9 +23,15 @@ struct region
     struct region *r_neighbour[6]; // The neightbour regions
 };
 
+struct score_info 
+{
+    unsigned int s_score;     // The score of the candidate.
+    unsigned int s_candidate; // The candidate that has this score.
+};
+
 // All the regions.
 static struct region g_candidates[4][16]; 
-static int g_candidates_scores[4] = {0}; // The score of each candidate.
+static struct score_info g_candidates_scores[4] = {0}; // The score of each candidate.
 static int g_scores_sum = 0; // curr generation probability sum. 
 
 static char *g_colors[4] = {
@@ -36,7 +43,7 @@ static char *g_colors[4] = {
  * Candidate is the current sample of the evolution.
  * @param candidate_regions The current candidate parent/child 
 */
-static inline int fitness_function(int *not_right, const struct region *candidate_regions)
+static inline int fitness_function(const struct region *candidate_regions)
 {
     int diff_color = 0; // count how many neightbours have the same color.
     struct region curr_region;
@@ -50,7 +57,6 @@ static inline int fitness_function(int *not_right, const struct region *candidat
             curr_neightbour = *curr_region.r_neighbour[j];
             // if the current region and an neightbour has the same color
             if (!strcmp(curr_region.r_color, curr_neightbour.r_color)) {
-                *not_right = 1;
                 continue;
             }
             ++diff_color;
@@ -152,15 +158,15 @@ static void print_grapth(const struct region *candidate_regions)
 
 }
 
-static void sort_scores()
+static void sort_by_score()
 {
-    int tmp;
+    unsigned int tmp;
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3 - i; j++) {
-            if (g_candidates_scores[j] > g_candidates_scores[j + 1]) {
-                tmp = g_candidates_scores[j + 1];
-                g_candidates_scores[j + 1] = g_candidates_scores[j];
-                g_candidates_scores[j] = tmp;
+            if (g_candidates_scores[j].s_score > g_candidates_scores[j + 1].s_score) {
+                tmp = g_candidates_scores[j + 1].s_score;
+                g_candidates_scores[j + 1].s_score = g_candidates_scores[j].s_score;
+                g_candidates_scores[j].s_score = tmp;
             }
         }
     }
@@ -168,14 +174,18 @@ static void sort_scores()
 
 static int inline decide_candidate(int decide)
 {
+    sort_by_score();
     int tmp_decide = decide;
 
     int cnd; // current candidate.
     int tmp = 0;
     for (cnd = 0; cnd < 4; cnd++) {
-        tmp = g_candidates_scores[cnd] - tmp_decide;;
-        if (tmp < 0) continue;
-        else if (tmp > 0) tmp_decide = tmp;
+        tmp = g_candidates_scores[cnd].s_score - tmp_decide;
+        if (tmp < 0) {
+            tmp_decide = tmp_decide - g_candidates_scores[cnd].s_score;
+            continue;
+        }
+        else if (tmp > 0) break;
         else break;
     }
     if (cnd == 4) --cnd;
@@ -186,10 +196,9 @@ static int inline decide_candidate(int decide)
 /**
  * @param parent_1 The first parent
  * @param parent_2 The second parent.
- * @param first_parent_gen Decide where we use the parent_1 or parent_2 genetic first
 */
-static struct region *create_offsprings(const struct region *parent_1,
-                                        const struct region *parent_2) 
+static struct region *create_offspring(const struct region *parent_1,
+                                       const struct region *parent_2) 
 {
     struct region *offspring = (struct region *) malloc(sizeof(struct region) * 16);
     if (NULL == offspring) return NULL;
@@ -242,12 +251,14 @@ int main(int argc, char *argv[])
     int whitch_partner_2 = 0;
     int old_whitch_partners_1 = 0;
     int old_whitch_partners_2 = 0;
-    int not_right = 0;
     // offsrpings.
     struct region *first_offspring;
     struct region *second_offspring;
     struct region *third_offspring;
     struct region *forth_offspring;
+    // how many times there are the same scores.
+    int same_sum = 0;
+    int prev_sum = 0;
 
     srand(time(NULL));
     // configure the regions.
@@ -263,15 +274,11 @@ int main(int argc, char *argv[])
     while (1) {
         // meseaure the score of each candidate
         for (int i = 0; i < 4; i++) {
-            tmp_score = fitness_function(&not_right, g_candidates[i]);
+            tmp_score = fitness_function(g_candidates[i]);
+            printf("score: %d\n", tmp_score);
             // Check if any candidate has solved the puzzle
-            if (!not_right) {
-                printf("DONE!\n");
-                printf("Candidate: %d\n", i + 1);
-                print_grapth(g_candidates[i]);
-                return 0;
-            }
-            g_candidates_scores[i] = tmp_score;
+            g_candidates_scores[i].s_score = tmp_score;
+            g_candidates_scores[i].s_candidate = i;
             g_scores_sum += tmp_score;
         }
 
@@ -294,29 +301,29 @@ int main(int argc, char *argv[])
         old_whitch_partners_1 =  0;
         old_whitch_partners_2 = 0;
         // create offsrpings.
-        first_offspring  = create_offsprings(g_candidates[set_of_partners[0]], g_candidates[set_of_partners[1]]);
-        second_offspring = create_offsprings(g_candidates[set_of_partners[1]], g_candidates[set_of_partners[0]]);
-        third_offspring  = create_offsprings(g_candidates[set_of_partners[2]], g_candidates[set_of_partners[3]]);
-        forth_offspring  = create_offsprings(g_candidates[set_of_partners[3]], g_candidates[set_of_partners[2]]);
+        first_offspring  = create_offspring(g_candidates[set_of_partners[0]], g_candidates[set_of_partners[1]]);
+        second_offspring = create_offspring(g_candidates[set_of_partners[1]], g_candidates[set_of_partners[0]]);
+        third_offspring  = create_offspring(g_candidates[set_of_partners[2]], g_candidates[set_of_partners[3]]);
+        forth_offspring  = create_offspring(g_candidates[set_of_partners[3]], g_candidates[set_of_partners[2]]);
         if (NULL == first_offspring || NULL == second_offspring ||
             NULL == third_offspring || NULL == forth_offspring) return 0;
-
+        
         // replace the old generation with the new.
         replace_generation(g_candidates[0], first_offspring);
         replace_generation(g_candidates[1], second_offspring);
         replace_generation(g_candidates[2], third_offspring);
         replace_generation(g_candidates[3], forth_offspring);
         // print the offsprings.
-        for (int i = 0; i < 4; i++) print_grapth(g_candidates[i]);
-
+        for (int i = 0; i < 4; i++) {
+            print_grapth(g_candidates[i]);
+        }
         // free the space allocated for offsprings.
         free(first_offspring);
         free(second_offspring);
         free(third_offspring);
         free(forth_offspring);
-
+        g_scores_sum = 0;
     }
 
-    // TODO - make it loop until you found a solution.
     return 0;
 }
