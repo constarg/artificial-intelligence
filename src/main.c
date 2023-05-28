@@ -163,7 +163,7 @@ static void sort_by_score()
     unsigned int tmp;
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3 - i; j++) {
-            if (g_candidates_scores[j].s_score > g_candidates_scores[j + 1].s_score) {
+            if (g_candidates_scores[j].s_score < g_candidates_scores[j + 1].s_score) {
                 tmp = g_candidates_scores[j + 1].s_score;
                 g_candidates_scores[j + 1].s_score = g_candidates_scores[j].s_score;
                 g_candidates_scores[j].s_score = tmp;
@@ -256,9 +256,6 @@ int main(int argc, char *argv[])
     struct region *second_offspring;
     struct region *third_offspring;
     struct region *forth_offspring;
-    // how many times there are the same scores.
-    int same_sum = 0;
-    int prev_sum = 0;
 
     srand(time(NULL));
     // configure the regions.
